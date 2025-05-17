@@ -498,3 +498,10 @@ cat report.csv
 </details>
 
 ******
+
+
+
+<br/><br/>
+
+[view week1_QA](./QA/week1_QA.md)  
+[view week2_QA](./QA/week2_QA.md)  
