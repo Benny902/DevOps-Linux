@@ -1,0 +1,6 @@
+ERROR Null pointer exception
+ERROR Authentication failed
+WARNING Disk space low
+INFO Cache cleared
+CRITICAL Data loss detected
+ERROR Backup failed

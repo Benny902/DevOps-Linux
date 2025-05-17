@@ -280,9 +280,220 @@ awk -F',' '{ print $2 }' data.csv
 
 
 <details>
-<summary>Week 2 Summary Task – bbb</summary>
+<summary>Week 2 Summary Task – Advanced Log Report Automation</summary>
 <br />
 
+## Task Overview
+
+creating a modular, user-friendly script that analyzes log files, generates a professional report, and supports dynamic input parameters.
+
+---
+
+## Detailed script with comments:
+#### (the clean script file `advanced_log_report.sh` without commnets is in the 'week2_summary' folder)
+```bash
+#!/bin/bash
+
+# Advanced Log Report Generator
+
+# CONFIG
+REPORT_TXT="report.txt"
+REPORT_CSV="report.csv"
+KEYWORDS=()
+LOG_DIR=""
+START_TIME=$(date +%s.%N)
+COLOR_ON=false
+RECURSIVE=false
+
+# print help when using the option '--help'
+print_help() {
+    echo "Usage: $0 <log_directory> [--keywords KEY1 KEY2 ...] [--recursive] [--color] [--help]"
+    echo ""
+    echo "Options:"
+    echo "  --keywords    List of keywords to search for (for example, ERROR WARNING CRITICAL)"
+    echo "  --recursive   Recursively scan all subdirectories"
+    echo "  --color       Enable colored terminal output"
+    echo "  --help        Display this help message"
+    exit 0
+}
+
+# parsing arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do # while still unchecked arguments (args>0)
+        case "$1" in
+            --keywords)
+                shift
+                while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do # while (keywords>0) and current argument ($1) does not start with --
+                    KEYWORDS+=("$1") # add the current argument to the KEYWORDS array
+                    shift # move to the next argument
+                done
+                ;;
+            --recursive)
+                RECURSIVE=true # set flag of recursive to true.
+                shift
+                ;;
+            --color)
+                COLOR_ON=true # set flag of color to true.
+                shift
+                ;;
+            --help)
+                print_help # calls the print_help function
+                ;;
+            -*)
+                echo "Unknown flag: $1" # if anything else then the known args then exit with error.
+                exit 1
+                ;;
+            *)
+                LOG_DIR="$1" # set the log_dir to the first arg
+                shift
+                ;;
+        esac
+    done
+}
+
+validate_input() {
+    if [[ -z "$LOG_DIR" ]]; then
+        echo "Error: Log directory not provided."
+        exit 1
+    fi
+    if [[ ! -d "$LOG_DIR" ]]; then
+        echo "Error: '$LOG_DIR' is not a valid directory."
+        exit 1
+    fi
+    if [[ ${#KEYWORDS[@]} -eq 0 ]]; then
+        echo "Error: No keywords specified."
+        exit 1
+    fi
+}
+
+# Prints the header section for each log file in both TXT and CSV formats
+print_header() {
+    local filename
+    filename=$(basename "$1") # extract just the filename from full path
+
+    # Print formatted header to report.txt
+    echo "Log File: $filename" | tee -a "$REPORT_TXT"
+    echo "| Keyword     | Occurrences |" | tee -a "$REPORT_TXT"
+    echo "|-------------|-------------|" | tee -a "$REPORT_TXT"
+
+    # Write header to CSV
+    echo "Log File: $filename" >> "$REPORT_CSV"
+    echo "Keyword,Occurrences" >> "$REPORT_CSV"
+}
+
+# Prints a single row of keyword and count in both TXT and CSV formats
+print_line() {
+    local keyword=$1
+    local count=$2
+
+    if $COLOR_ON; then  # Print colorized line to terminal and append to report.txt
+        printf "| \e[1;33m%-11s\e[0m | \e[1;36m%-11s\e[0m |\n" "$keyword" "$count" | tee -a "$REPORT_TXT"
+    else                # Print plain text line and append to report.txt
+        printf "| %-11s | %-11s |\n" "$keyword" "$count" | tee -a "$REPORT_TXT"
+    fi
+
+    # Write the same data to the CSV report
+    echo "$keyword,$count" >> "$REPORT_CSV"
+}
+# \e[1;33m              - ANSI escape code to set bold yellow text
+# %-11s                 - Left-align the string ($keyword and on the other $count) in an 11-character column
+# \e[0m                 - Reset formatting (clear color/bold)
+# \e[1;36m              - ANSI escape code to set bold cyan text
+# tee -a "$REPORT_TXT"  - writes the output to both terminal (stdout) and appends (-a means "append", not overwrite) it to the file $REPORT_TXT
+
+
+generate_report() {
+    # Clear previous report files ('>' overwrites, '>>' appends — here we overwrite)
+    echo "" > "$REPORT_TXT"
+    echo "" > "$REPORT_CSV"
+    
+    local files
+    # Determine which files to scan based on recursion flag
+    if $RECURSIVE; then
+        files=$(find "$LOG_DIR" -type f)
+    else
+        files=$(find "$LOG_DIR" -maxdepth 1 -type f)
+    fi
+
+    for file in $files; do # Process each file found
+        print_header "$file" # Write file section header
+
+        # Count and write occurrences for each keyword
+        for keyword in "${KEYWORDS[@]}"; do  # Loop through each keyword passed via --keywords
+            count=$(grep -o "$keyword" "$file" 2>/dev/null | wc -l)  # Count how many times the keyword appears in the file
+            print_line "$keyword" "$count"  # Print the result in table format and append to TXT/CSV
+        done
+
+        echo ""                     # New line to separate entries in terminal
+        echo "" >> "$REPORT_TXT"    # New line in TXT report
+        echo "" >> "$REPORT_CSV"    # New line in CSV report
+    done
+}
+# wc -l         - counts how many matches
+# 2>/dev/null   - silently suppress error messages from grep when:
+## The file can’t be read (e.g., permission denied)
+### The file is binary or corrupted
+#### grep hits something unexpected and normally prints to stderr
+
+# Calculates and prints the total script execution time
+print_execution_time() {
+    END_TIME=$(date +%s.%N)  # Capture current time with nanosecond precision
+    DURATION=$(echo "$END_TIME - $START_TIME" | bc)  # Subtract start time from end time using bc for float math
+    echo "Total Execution Time: ${DURATION} seconds" | tee -a "$REPORT_TXT"  # Print and append the duration to the report
+}
+# bc handles the subtraction with decimal precision, because Bash can’t subtract floats natively.
+
+main() {
+    parse_args "$@"
+    validate_input
+    generate_report
+    print_execution_time
+}
+
+# '$@': all the command-line arguments, exactly as passed, preserving quotes.
+main "$@"
+```
+
+### Key Features
+- Accepts a log directory as input
+- Supports `--keywords` flag with multiple terms ( `--keywords ERROR WARNING CRITICAL` )
+- Recursively scans directories with `--recursive`
+- Outputs results to `report.txt` and `report.csv`
+- Includes total execution time
+- Colored terminal output with `--color`
+- Usage guide with `--help`
+- Modular structure with clear functions and error handling
+
+---
+
+## Example Usage
+
+```bash
+chmod +x advanced_log_report.sh
+
+# Basic usage
+./advanced_log_report.sh ./logs --keywords ERROR WARNING CRITICAL
+
+# Recursive search
+./advanced_log_report.sh ./logs --keywords ERROR WARNING CRITICAL --recursive
+
+# With color output
+./advanced_log_report.sh ./logs --keywords ERROR WARNING CRITICAL --recursive --color
+
+# Show help
+./advanced_log_report.sh --help
+```
+
+
+### it will generate two files:
+    - `report.txt`: Human-readable summary
+    - `report.csv`: Machine-readable CSV format
+
+### view them with cat (or open them manually):
+```bash
+cat report.txt
+cat report.csv
+```
 
 </details>
 
