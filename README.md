@@ -297,8 +297,9 @@ creating a modular, user-friendly script that analyzes log files, generates a pr
 # Advanced Log Report Generator
 
 # CONFIG
-REPORT_TXT="report.txt"
-REPORT_CSV="report.csv"
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+REPORT_TXT="report_$TIMESTAMP.txt"
+REPORT_CSV="report_$TIMESTAMP.csv"
 KEYWORDS=()
 LOG_DIR=""
 START_TIME=$(date +%s.%N)
@@ -315,6 +316,18 @@ print_help() {
     echo "  --color       Enable colored terminal output"
     echo "  --help        Display this help message"
     exit 0
+}
+
+show_spinner() {
+    local filename="$1"
+    local spinstr='|/-\\'
+    local delay=0.1
+
+    for i in {1..10}; do
+        printf "\r[%c] Scanning: %s" "${spinstr:i%4:1}" "$filename" >&1
+        sleep $delay
+    done
+    printf "\r[V] Scanning: %s\n" "$filename"
 }
 
 # parsing arguments
@@ -410,12 +423,10 @@ generate_report() {
     local files
     # Determine which files to scan based on recursion flag
     if $RECURSIVE; then
-        files=$(find "$LOG_DIR" -type f)
+        find "$LOG_DIR" -type f -name '*.log'
     else
-        files=$(find "$LOG_DIR" -maxdepth 1 -type f)
-    fi
-
-    for file in $files; do # Process each file found
+        find "$LOG_DIR" -maxdepth 1 -type f -name '*.log'
+    fi | while IFS= read -r file; do # Process each file found ### 'for' cannot safely handle filenames with spaces or newlines. we must use 'while'
         print_header "$file" # Write file section header
 
         # Count and write occurrences for each keyword
