@@ -539,11 +539,6 @@ ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa
 and then presse 'enter' to accept the file location.  
 and again press 'enter' two times to skip setting passphrase.
 
-### display the key and copy it
-```bash
-cat ~/.ssh/id_rsa
-```
-
 ### Script to create an Azure Linux VM and Add this public key to the VM
 ```bash
 #!/bin/bash
@@ -599,10 +594,10 @@ ssh azureuser@<vm-public-ip>
 exit 
 
 # Upload file
-scp myfile.txt azureuser@<vm-ip>:/home/azureuser/
+scp myfile.txt azureuser@<vm-public-ip>:/home/azureuser/
 
 # Download file back to a different local path
-scp azureuser@vm-public-ip:/home/azureuser/myfile.txt myfile_copied.txt
+scp azureuser@<vm-public-ip>:/home/azureuser/myfile.txt myfile_copied.txt
 
 ```
 
