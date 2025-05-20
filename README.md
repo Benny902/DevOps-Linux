@@ -510,9 +510,154 @@ cat report.csv
 
 ******
 
+<details>
+<summary>Week 3 Tasks – Daily Practice Tasks</summary>
+<br />
+
+## Task 1: Basic IP & Port Exploration
+
+```bash
+ip a              # Show local IP addresses
+ifconfig          # Alternate IP viewer (may require net-tools)
+
+netstat -tuln     # List all listening ports (TCP/UDP)
+ss -tuln          # Modern alternative to netstat
+```
+
+**Explanation of `127.0.0.1:22`:**  
+127.0.0.1 this IP address is a loopback address that points to the computer, smartphone, or tablet you are using, and is also called localhost.  
+Port 22 is dedicated to Secure Shell (SSH), which allows you to securely connect to a remote device and issue commands as if you were in front of it.
+
+---
+
+## Task 2: Generate SSH Key & Connect (+Task 3: Create Azure VM)
+
+### Generate the SSH key:
+```bash
+ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa
+```
+and then presse 'enter' to accept the file location.  
+and again press 'enter' two times to skip setting passphrase.
+
+### display the key and copy it
+```bash
+cat ~/.ssh/id_rsa
+```
+
+### Script to create an Azure Linux VM and Add this public key to the VM
+```bash
+#!/bin/bash
+
+# Set variables
+RESOURCE_GROUP="bennyVM"
+LOCATION="westeurope"
+VM_NAME="myvm"
+ADMIN_USER="azureuser"
+
+# Create resource group
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+
+# Create VM
+az vm create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --image Ubuntu2204 \
+  --size Standard_B1s \
+  --admin-username "$ADMIN_USER" \
+  --authentication-type ssh \
+  --generate-ssh-keys
+
+# Add the public key to the VM (from ~/.ssh/id_rsa.pub)
+az vm user update \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --username "$ADMIN_USER" \
+  --ssh-key-value "$(cat ~/.ssh/id_rsa.pub)"
+
+# Open SSH port 22 (if not already open)
+az vm open-port --port 22 --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"
+```
+
+### Run the Script:
+```bash
+chmod +x create_vm_and_add_public_key.sh
+./create_vm_and_add_public_key.sh
+```
+
+### Connect to the Azure VM without password:
+```bash
+ssh azureuser@<vm-public-ip>
+```
+
+---
+
+
+## Task 4: Remote File Transfer with SCP
+
+```bash
+# if we are connected to the azure, we need to 'exit' to return to the local wsl
+exit 
+
+# Upload file
+scp myfile.txt azureuser@<vm-ip>:/home/azureuser/
+
+# Download file back to a different local path
+scp azureuser@vm-public-ip:/home/azureuser/myfile.txt myfile_copied.txt
+
+```
+
+---
+
+## Task 5: Run a Remote Command via SSH
+
+```bash
+# Run commands remotely
+ssh -t azureuser@<vm-public-ip> "uptime"
+ssh -t azureuser@<vm-public-ip> "df -h"
+ssh -t azureuser@<vm-public-ip> "ls -l /home/azureuser"
+
+# Save output locally
+ssh -t azureuser@<vm-public-ip> "df -h" > vm_disk_usage.txt
+```
+
+</details>
+
+******
+
+<details>
+<summary>Week 3 Summary Task – </summary>
+<br />
+
+
+
+</details>
+
+******
+
+<details>
+<summary>Week 4 Tasks – </summary>
+<br />
+
+
+
+</details>
+
+******
+
+<details>
+<summary>Week 4 Summary Task – </summary>
+<br />
+
+
+
+</details>
+
+******
+
 
 
 <br/><br/>
 
 [view week1_QA](./QA/week1_QA.md)  
 [view week2_QA](./QA/week2_QA.md)  
+[view week3_QA](./QA/week3_QA.md)
