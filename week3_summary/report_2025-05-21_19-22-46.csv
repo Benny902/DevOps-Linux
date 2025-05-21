@@ -1,0 +1,49 @@
+
+Log File: zippedlog2.log
+Keyword,Occurrences
+ERROR,1
+WARNING,2
+CRITICAL,1
+
+Log File: app4.log
+Keyword,Occurrences
+ERROR,3
+WARNING,1
+CRITICAL,1
+
+Log File: app1.log
+Keyword,Occurrences
+ERROR,2
+WARNING,1
+CRITICAL,1
+
+Log File: zippedlog1.log
+Keyword,Occurrences
+ERROR,2
+WARNING,1
+CRITICAL,1
+
+Log File: app3.log
+Keyword,Occurrences
+ERROR,3
+WARNING,1
+CRITICAL,1
+
+Log File: app5.log
+Keyword,Occurrences
+ERROR,1
+WARNING,2
+CRITICAL,1
+
+Log File: zippedlog3.log
+Keyword,Occurrences
+ERROR,2
+WARNING,1
+CRITICAL,1
+
+Log File: app2.log
+Keyword,Occurrences
+ERROR,1
+WARNING,2
+CRITICAL,1
+

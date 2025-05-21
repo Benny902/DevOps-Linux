@@ -1,20 +1,20 @@
 #!/bin/bash
 
 # Set variables
-RESOURCE_GROUP="bennyVM"
-LOCATION="westeurope"
+RESOURCE_GROUP="bennyVMeastus2"
+LOCATION="eastus2" # cheapest for Standard_B1ls as i saw in pricing
 VM_NAME="myvm"
 ADMIN_USER="azureuser"
 
 # Create resource group
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
-# Create VM
+# Create VM # Standard_B1ls is the cheapest.
 az vm create \
   --resource-group "$RESOURCE_GROUP" \
   --name "$VM_NAME" \
   --image Ubuntu2204 \
-  --size Standard_B1s \
+  --size Standard_B1ls \
   --admin-username "$ADMIN_USER" \
   --authentication-type ssh \
   --generate-ssh-keys

@@ -544,20 +544,20 @@ and again press 'enter' two times to skip setting passphrase.
 #!/bin/bash
 
 # Set variables
-RESOURCE_GROUP="bennyVM"
-LOCATION="westeurope"
+RESOURCE_GROUP="bennyVMeastus2"
+LOCATION="eastus2" # cheapest for Standard_B1ls as i saw in pricing
 VM_NAME="myvm"
 ADMIN_USER="azureuser"
 
 # Create resource group
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
-# Create VM
+# Create VM # Standard_B1ls is the cheapest.
 az vm create \
   --resource-group "$RESOURCE_GROUP" \
   --name "$VM_NAME" \
   --image Ubuntu2204 \
-  --size Standard_B1s \
+  --size Standard_B1ls \
   --admin-username "$ADMIN_USER" \
   --authentication-type ssh \
   --generate-ssh-keys
@@ -620,10 +620,204 @@ ssh -t azureuser@<vm-public-ip> "df -h" > vm_disk_usage.txt
 ******
 
 <details>
-<summary>Week 3 Summary Task – </summary>
+<summary>Week 3 Summary Task – Remote Log
+Monitoring with SSH & VM </summary>
 <br />
 
+## Task Objective:
+This task is designed to consolidate the skills learned throughout Week 3 and apply them
+in a practical, real-world DevOps scenario. You will connect to a remote virtual machine
+using SSH, retrieve log files, analyze them for critical patterns (e.g., ERROR,
+WARNING), and produce professional reports in both human-readable TXT and CSV
+formats. This exercise reinforces concepts from previous weeks—including Bash
+scripting, keyword parsing, working with files, and now adds secure networking and
+virtual infrastructure access.
 
+## Before we start, need to make sure you can connect to the VM without password:
+(further instructions are in 'week3 - Daily Practice Tasks' above)
+```bash
+ssh azureuser@<vm-public-ip>
+```
+* after verifying, now we can `exit`
+
+## Now we send some logs to the VM:
+Script: `upload_logs_to_vm.sh`:
+```bash
+#!/bin/bash
+
+REMOTE="$1"
+LOCAL_FOLDER="$2"
+REMOTE_FOLDER="$3"
+
+if [[ -z "$REMOTE" || -z "$LOCAL_FOLDER" || -z "$REMOTE_FOLDER" ]]; then
+  echo "Usage: $0 <user@host> <local_folder> <remote_folder>"
+  echo "Example: $0 azureuser@52.1.2.3 ./logs /home/azureuser/logs_target"
+  exit 1
+fi
+
+if [[ ! -d "$LOCAL_FOLDER" ]]; then
+  echo "Error: '$LOCAL_FOLDER' is not a valid local directory"
+  exit 1
+fi
+
+# Strip trailing slash if present
+LOCAL_FOLDER="${LOCAL_FOLDER%/}"
+
+# Ensure remote folder exists
+ssh "$REMOTE" "mkdir -p \"$REMOTE_FOLDER\""
+
+echo "Uploading '$LOCAL_FOLDER/' to $REMOTE:$REMOTE_FOLDER ..."
+rsync -avz --progress "$LOCAL_FOLDER/" "$REMOTE:$REMOTE_FOLDER/"
+
+echo "Upload complete → $REMOTE:$REMOTE_FOLDER"
+```
+- `-a` archive mode: preserves permissions, timestamps, symbolic links, etc.
+
+- `-v` verbose: prints what’s happening.
+
+- `-z` compress: compresses file data during the transfer for efficiency.
+
+- `--progress` shows real-time progress of file transfers.
+
+- `"$LOCAL_FOLDER/"` Trailing slash means “copy contents of the folder” (not the folder itself).
+
+- `"$REMOTE:$REMOTE_FOLDER/"` Specifies the remote user/host and destination directory.
+
+### Usage:
+```bash
+chmod +x upload_logs_to_vm.sh
+./upload_logs_to_vm.sh <user@host> <local_folder> <remote_folder>
+```
+
+## Example:
+```bash
+./upload_logs_to_vm.sh azureuser@13.68.110.243 ./logs_to_upload /home/azureuser/logs_in_remote
+```
+
+## Now we can get logs from the VM:
+Script: `remote_wrapper.sh`:
+```bash
+#!/bin/bash
+
+# Remote Wrapper for Local Log Analyzer
+## Downloads log files from a remote server, extracts archives,
+## and invokes the local advanced_log_report.sh analyzer script.
+
+# CONFIG
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")  # Current timestamp for folder uniqueness
+TMP_DIR="./tmp_logs_$TIMESTAMP"         # Temporary directory for downloaded/extracted logs
+START_TIME=$(date +%s.%N)               # Start time for execution duration
+
+# Print usage instructions
+print_help() {
+    echo "Usage: $0 <remote_user@host> <remote_log_dir> --keywords KEY1 [KEY2 ...] [--recursive] [--color]"
+    echo ""
+    echo "Positional arguments:"
+    echo "  <remote_user@host>       Remote SSH login"
+    echo "  <remote_log_dir>         Remote directory containing logs"
+    echo ""
+    echo "Options (passed to advanced_log_report.sh):"
+    echo "  --keywords KEY1 [...]    Required keywords to search for"
+    echo "  --recursive              Recursively scan subdirectories"
+    echo "  --color                  Enable colored output"
+    echo "  --help                   Show this help message"
+    exit 1
+}
+
+# Validate argument count and check for --help flag
+if [[ "$#" -lt 3 || "$1" == "--help" ]]; then # if args less than 3 or the first argument is --help
+    print_help
+fi
+
+# Ensure required --keywords argument exists
+if ! printf '%s\n' "$@" | grep -q -- "--keywords"; then
+    echo "Error: Missing required --keywords argument."
+    print_help
+fi
+# -q means “quiet” (no output, just sets exit code if found/not found), and when grep sees -- and stops treating further arguments as options.
+
+# Extract and shift positional arguments
+REMOTE_HOST="$1"       # Remote SSH login (e.g. user@host)
+REMOTE_DIR="$2"        # Path to remote directory with logs
+shift 2
+PASSTHRU_ARGS=("$@")   # All remaining arguments passed to local analyzer
+
+# Download logs and archives from the remote server
+download_logs() {
+    mkdir -p "$TMP_DIR"  # Create TMP_DIR if it doesn't exist (-p means no error if it exists)
+    echo "[*] Downloading logs and archives..."
+    
+    # Run a remote 'find' via SSH: list all .log, .zip, .tar, .tar.gz files under REMOTE_DIR (escaped parentheses and quotes for correct remote parsing)
+    ssh "$REMOTE_HOST" "find \"$REMOTE_DIR\" -type f \\( -iname '*.log' -o -iname '*.zip' -o -iname '*.tar' -o -iname '*.tar.gz' \\)" > /tmp/remote_log_list.txt # ">" overwrite if exists.
+
+    # Read each line (remote file path) from the log list
+    while IFS= read -r remote_file; do
+        echo "[Downloading] $remote_file"
+        # Try rsync for efficient copying:
+        # -a (archive, preserves attributes), -v (verbose), -z (compress), --protect-args (handle spaces/special chars)
+        # 2>/dev/null hides rsync errors (so script can fallback to scp)
+        rsync -avz --protect-args "$REMOTE_HOST:$remote_file" "$TMP_DIR/" 2>/dev/null || \
+        # If rsync fails (exit code not zero), use scp as fallback
+        # -q (quiet), quotes protect spaces in remote path
+        scp -q "$REMOTE_HOST:\"$remote_file\"" "$TMP_DIR/"
+    done < /tmp/remote_log_list.txt
+}
+# Use rsync first for its efficiency (only transfers changes, can resume, preserves file attributes, handles spaces, and provides progress output).
+# Fall back to scp for compatibility on systems where rsync is not installed or unavailable.
+
+# Extract all supported archive types (.zip, .tar, .tar.gz)
+extract_archives() {
+    echo "[*] Extracting archives..."
+    find "$TMP_DIR" -type f \( -iname "*.zip" -o -iname "*.tar" -o -iname "*.tar.gz" \) | while read -r archive; do
+        case "$archive" in
+            *.zip) unzip -q "$archive" -d "$TMP_DIR" ;; # in unzip -d is directory
+            *.tar) tar -xf "$archive" -C "$TMP_DIR" ;; # but in tar its -C ## -x (extract), -f (archive file).
+            *.tar.gz) tar -xzf "$archive" -C "$TMP_DIR" ;; # same here -C . ## -x (extract), -z (gzip support), -f (archive file).
+        esac
+    done
+}
+
+# Run the local analyzer script on the downloaded and extracted logs
+run_local_analyzer() {
+    echo "[*] Running local analyzer..."
+    chmod +x ./advanced_log_report.sh
+    ./advanced_log_report.sh "$TMP_DIR" "${PASSTHRU_ARGS[@]}"
+}
+
+# Main flow
+main() {
+    download_logs
+    extract_archives
+    run_local_analyzer
+}
+
+main
+```
+### Key Features
+- Connects to a remote server via SSH (<user@host>)
+- Accepts a remote log directory path as positional input
+- Automatically downloads .log, .zip, .tar, and .tar.gz files
+- Supports recursive scanning of subdirectories with --recursive
+- Extracts archives locally before analysis
+- Passes all flags (--keywords, --color, etc.) to the local analyzer (advanced_log_report.sh)
+- Accepts --keywords with one or more terms (e.g. --keywords ERROR WARNING)
+- Produces structured output: remote_report_*.txt and remote_report_*.csv (via delegated script)
+- Displays execution progress with clear status messages and spinners
+- Includes built-in --help with usage examples
+- Modular function-based architecture for clean maintenance and extension
+
+
+## Script Usage
+```bash
+sudo apt install unzip # the script uses unzip
+chmod +x remote_wrapper.sh
+./remote_wrapper.sh <remote_user@host> <remote_log_dir> [--keywords KEY1 KEY2 ...] [--recursive] [--color] [--help]
+```
+
+### Example:
+```bash
+./remote_wrapper.sh azureuser@13.68.110.243 /home/azureuser/logs_in_remote --keywords ERROR WARNING CRITICAL --recursive --color
+```
 
 </details>
 

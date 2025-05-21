@@ -1,0 +1,58 @@
+
+Log File: zippedlog2.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m1          [0m |
+| [1;33mWARNING    [0m | [1;36m2          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Log File: app4.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m3          [0m |
+| [1;33mWARNING    [0m | [1;36m1          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Log File: app1.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m2          [0m |
+| [1;33mWARNING    [0m | [1;36m1          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Log File: zippedlog1.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m2          [0m |
+| [1;33mWARNING    [0m | [1;36m1          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Log File: app3.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m3          [0m |
+| [1;33mWARNING    [0m | [1;36m1          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Log File: app5.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m1          [0m |
+| [1;33mWARNING    [0m | [1;36m2          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Log File: zippedlog3.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m2          [0m |
+| [1;33mWARNING    [0m | [1;36m1          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Log File: app2.log
+| Keyword     | Occurrences |
+|-------------|-------------|
+| [1;33mERROR      [0m | [1;36m1          [0m |
+| [1;33mWARNING    [0m | [1;36m2          [0m |
+| [1;33mCRITICAL   [0m | [1;36m1          [0m |
+
+Total Execution Time: 8.139136739 seconds

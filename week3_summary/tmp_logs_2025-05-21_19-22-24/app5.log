@@ -1,0 +1,6 @@
+INFO Service started
+ERROR Timeout reached
+WARNING Memory usage high
+CRITICAL Kernel panic
+WARNING Unusual network activity
+INFO Service stopped
