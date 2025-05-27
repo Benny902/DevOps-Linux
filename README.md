@@ -824,10 +824,154 @@ chmod +x remote_wrapper.sh
 ******
 
 <details>
-<summary>Week 4 Tasks – </summary>
+<summary>Week 4 Tasks – Daily Practice Tasks </summary>
 <br />
 
+## Task 1: Branching & Switching
+Initialize a new local Git repository:
+```bash
+git init
+echo "# Week 4 Git Practice" > README.md
+git add README.md
+git commit -m "init"
+```
 
+Create two branches:
+```bash
+git checkout -b feature-a
+git checkout -b feature-b
+```
+
+Switch between them:
+```bash
+git switch feature-a
+# or
+git checkout feature-a
+```
+
+Make a change on each branch and commit:
+```bash
+echo "Change for feature-a" >> file.txt
+git add file.txt
+git commit -m "Add feature-a change"
+```
+
+---
+
+## Task 2: Simulate and Resolve Merge Conflicts
+In both branches, edit the **same line** in `file.txt` to different content.
+
+Merge one branch into the other and observe the conflict:
+```bash
+git checkout feature-a
+git merge feature-b
+```
+
+Resolve the conflict manually in the editor or using:
+```bash
+git status
+# Edit the file to fix conflicts
+git add file.txt
+git commit -m "Resolve merge conflict"
+```
+after `git add file.txt` and `git commit -m "Resolve merge conflict"` Git stores the resolved version and finalizes the merge.
+
+---
+
+## Task 3: Rebase and Cherry-Pick
+before the rebase, we can view the log history by `git log --oneline`:
+>$ git log --oneline  
+>1605d5c (HEAD -> feature-a) Resolve merge conflict  
+>97cdfc0 (feature-b) Add feature-a change  
+>84a807b Add feature-a change  
+>b4b7a66 (master) init  
+
+
+Rebase `feature-a` onto `master`:
+```bash
+git checkout feature-a
+git rebase master
+```
+
+if we have conflict we have few options:  
+- we can resolve the conflict and then use `git rebase --continue` to continue with the rebase.
+- we can skip the commit with the conflict it `git rebase --skip`.
+- or we can abord the rebase with `git rebase --abort`.
+
+i had conflict, so using the editor i made a combination of both features in the file.txt.  
+and now to view the changes and the commit history log history again by `git log --oneline`:
+>$ git log --oneline  
+>dff5c7e (HEAD -> feature-a) add feature-a and feature-b change  
+>84a807b Add feature-a change  
+>b4b7a66 (master) init  
+
+Cherry-pick a single commit from `feature-b`:
+```bash
+git checkout master
+git cherry-pick <commit-hash>
+```
+if we want to cancel it we can do `git reset --hard HEAD~1`.  
+This will delete the last commit and reset your branch to its previous state.
+
+
+- `merge`: Adds both of the branches histories together with a special "merge commit."
+- `rebase`: Moves the commits on top of the target branch, making it a straight timeline.
+
+---
+
+## Task 4: GitHub Pull Requests & Code Review
+We can view all our branches by:
+```bash
+git branch # see all local branches
+git branch -a # see local and remote branches
+```
+
+create remote repository (or in github UI):
+```bash
+gh repo create <repo_name> --public --source=. --remote=origin --push
+```
+
+Add the remote repository and push all branches:
+```bash
+git remote add origin https://github.com/<username>/<repo_name>.git
+git push --all origin
+```
+
+can choose which branch to be the default (im changing to master):
+```bash
+gh repo edit --default-branch master
+```
+
+Create a pull request from `feature-a` into `master`:
+```bash
+gh pr create --base master --head feature-a --title "Merge feature-a" --body "This pull request merges feature-a into master."
+```
+
+---
+
+## Task 5: Stash, Amend, and Cleanup
+Make local changes and stash them:
+```bash
+echo "Temporary change" >> temp.txt
+git add temp.txt
+git stash
+```
+
+Restore the stash:
+```bash
+git stash pop
+```
+
+Amend the last commit:
+```bash
+git commit --amend -m "Updated commit message"
+```
+
+Clean up local branches already merged:
+```bash
+git branch --merged
+git branch -d feature-b
+```
 
 </details>
 
