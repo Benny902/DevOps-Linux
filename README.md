@@ -978,7 +978,122 @@ git branch -d feature-b
 ******
 
 <details>
-<summary>Week 4 Summary Task – </summary>
+<summary>Week 4 Summary Task – GitHub Collaboration Simulation </summary>
+<br />
+
+## Overview
+
+### https://github.com/snir1551/week4-collaboration
+
+This repository demonstrates a real-world collaborative Git workflow with a focus on:
+- Branching and feature development.
+- Conflict simulation and resolution.
+- Using `rebase` and `cherry-pick` .
+- Clean commit history and code review.
+- Automations: GitHub Actions for linting and logging (permission given through the Settings in github).
+
+
+## Repository & Branch Setup
+```bash
+gh repo create week4-collaboration --public --source=. --remote=origin --push
+# or via GitHub UI
+
+git branch feature-a
+git branch feature-b
+```
+
+## Simulate a Merge Conflict
+Edit the same line in a shared file (e.g., main.py) on both feature-a and feature-b.
+```bash
+git checkout feature-a
+nano main.py # and write the below, and then alt+o , enter , alt+x
+print("Hello from feature-a")
+git add main.py
+git commit -m "update main.py from feature-a"
+git push -u origin feature-a
+
+git checkout feature-b
+nano main.py # and write the below, and then alt+o , enter , alt+x
+print("Hello from feature-b")
+git add main.py
+git commit -m "update main.py from feature-b"
+git push -u origin feature-b
+```
+
+## Open PR on first branch 'feature-a' and Merge to main
+```bash
+gh pr create --base main --head feature-a --title "Merge feature-a" --body "Add feature-a changes"
+```
+- Snir assigned me as reviewer and used labels for PR.  
+- PR Approved and merged to main.
+
+## Rebase feature-b branch based on new main (after merged the feature-a)
+```bash
+git checkout main
+git pull
+git checkout feature-b
+git rebase main
+# Resolve conflicts if any, (for example we edited the main.py)
+# and then we did `git rebase --continue` to continue.
+git push
+```
+
+## Open PR on second branch 'feature-b' and Merge to main
+```bash
+gh pr create --base main --head feature-b --title "Merge feature-b" --body "Add feature-b changes"
+```
+Assigned Snir as reviewer and used labels for PR.  
+PR Approved and merged to main.
+
+
+## added third branch to simulate cherry-pick:
+we used cherry-pick to get some 'bug fix' from a branch with multiple commits: git cherry-pick bffbf23
+```bash
+git checkout main
+git log --oneline --graph --all # used to see all the commit hash's
+git cherry-pick <commit-hash> # git cherry-pick bffbf23 
+git push
+```
+- https://github.com/snir1551/week4-collaboration/commit/7af83de4809c3ea30554f017959b2a48ada57473
+
+
+## git log graph
+![alt text](images/gitLogGraph.png)
+
+## Added `REFLECTION.md`:
+- What was the most challenging Git concept this week?
+	1. the most challenging concept was understanding the Rebase concept and when its best to use it and how exactly.
+
+
+- What did you learn about collaboration? 
+	1. we learned that we need to have good communication in order to not cause conflict by working on same files or branchs,
+and also make the work faster and more efficient by allowing each of the collaborator to work on different feature.
+	2. that we should create issue before creating a pull request.
+
+
+- What mistakes did you make and how did you fix them? 
+	1. we didnt pull the recent changes from main before trying to apply changes from new branchs, which made problems
+
+	2. we accidently commited and pushed to the wrong branch, and we fixed it by using git reset --hard HEAD~1
+
+
+</details>
+
+
+******
+
+<details>
+<summary>Week 5 Tasks – Daily Practice Tasks </summary>
+<br />
+
+
+
+</details>
+
+******
+
+<details>
+<summary>Week 5 Summary Task – </summary>
 <br />
 
 
