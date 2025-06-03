@@ -1086,7 +1086,225 @@ and also make the work faster and more efficient by allowing each of the collabo
 <summary>Week 5 Tasks – Daily Practice Tasks </summary>
 <br />
 
+# CI/CD with GitHub Actions
+repo with the cicd implementations: https://github.com/Benny902/week5practice
 
+## Task 1: Introduction to GitHub Actions
+
+- **What is a GitHub Action?**  
+  A GitHub Action is an automated workflow step or script that runs in response to events (like code pushes, pull requests, or issues). It’s used for tasks like building, testing, and deploying the application.
+
+- **What is the difference between a job and a step?**  
+  - A **job** is a set of steps that run on the same runner (virtual machine). Jobs run in parallel by default.  
+  - A **step** is a single task within a job (like `npm install` or `echo "Hello"`). Steps run sequentially within a job.
+
+- **What triggers a workflow?**  
+  Workflows are triggered by events (like `push`, `pull_request`, `workflow_dispatch`), a schedule (cron), or manually from the GitHub Actions UI.
+
+---
+
+## Task 2: Basic CI Pipeline for Testing
+1. In the project’s root, creating a new folder `.github/workflows`.  
+2. Inside `.github/workflows`, create a file named `ci.yml`.  
+3. A template for a Node.js app:
+
+```yaml
+name: CI Pipeline
+
+on: # Runs on every push and pull request
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm install # Installs dependencies
+      - run: npm test # Runs test script
+```
+
+---
+
+## Task 3: Matrix Strategy
+1. modifying the `ci.yml` file to include a matrix strategy:  
+
+```yaml
+    strategy:
+      matrix: # Defines a matrix for versions
+        node-version: [14, 16, 18]
+
+    steps:
+        with:
+          node-version: ${{ matrix.node-version }}
+```
+we can confirm the workflow runs once for each version by checking the 'GitHub Actions' run results.  
+for example in my case: https://github.com/Benny902/week5practice/actions/runs/15419936970
+
+---
+
+## Task 4: Artifacts and Post-job Monitoring
+
+In the **backend job**, we add a step to upload the test log file as an artifact:  
+
+```yaml
+- name: Upload test results
+  uses: actions/upload-artifact@v4
+  with:
+    name: backend-test-results-node${{ matrix.node-version }}
+    path: backend/test-results.log
+```
+we can download an artifact zip file from the link above, and see it has 'test-results.log' file inside of it.
+
+
+In the **frontend job**, we validate availability with `curl -I http://localhost:4000`.
+
+---
+
+## Task 5: Slack/Discord Integration
+1. Integrate the workflow with Slack (i chose Slack)
+2. Store the webhook URL in the GitHub repo secrets (`SLACK_WEBHOOK_URL`).  
+3. Add a Slack notification step to the workflow:  
+
+add to the yaml for slack:
+```yaml
+- name: Notify Slack (Backend)
+  if: always()
+  uses: slackapi/slack-github-action@v1.25.0
+  with:
+    payload: |
+    {
+        "text": "*Job:* Backend (Node.js ${{ matrix.node-version }})\n*Status:* ${{ job.status }}\n*Duration:* ${{ env.JOB_DURATION }} seconds\n*Workflow:* ${{ github.workflow }}\n*Run:* #${{ github.run_number }}\n*Repo:* ${{ github.repository }}"
+    }
+  env:
+    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+- name: Notify Slack (Frontend)
+  if: always()
+  uses: slackapi/slack-github-action@v1.25.0
+  with:
+    payload: |
+    {
+        "text": "*Job:* Frontend (Node.js ${{ matrix.node-version }})\n*Status:* ${{ job.status }}\n*Duration:* ${{ env.JOB_DURATION }} seconds\n*Workflow:* ${{ github.workflow }}\n*Run:* #${{ github.run_number }}\n*Repo:* ${{ github.repository }}"
+    }
+  env:
+    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+Screenshot of the outcome:  
+![alt text](images/slack.png) 
+
+---
+
+## Task 6: Combined Frontend and Backend CI/CD
+1. created simple backend and frontend folder and files
+2. enhanced the yml, this is the final yml file:
+```yaml
+name: Microblog CI
+
+on: # Runs on every push and pull request
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: # Matrix strategy to test multiple Node.js versions
+        node-version: [14, 16, 18]
+    steps:
+      - uses: actions/checkout@v3 # Check out the code from the repo
+      - name: Set job start time
+        run: echo "JOB_START_TIME=$(date +%s)" >> $GITHUB_ENV # Record the start time in seconds and store it in GitHub Actions environment variable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3 # Use the official Node.js setup action
+        with:
+          node-version: ${{ matrix.node-version }} # Use the Node.js version from the matrix
+
+      - name: Install backend dependencies
+        run: |
+          cd backend # Move into the backend directory
+          npm install # Install npm dependencies
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          npm test | tee test-results.log # Run tests and write output to test-results.log
+          echo "Build finished successfully at $(date)" >> test-results.log 
+      - name: Upload test results
+        uses: actions/upload-artifact@v4 # Upload the artifact to GitHub Actions
+        with:
+          name: backend-test-results-node${{ matrix.node-version }} # Artifact name includes the Node.js version
+          path: backend/test-results.log # Path of the file to upload
+
+      - name: Calculate job duration
+        run: echo "JOB_DURATION=$(( $(date +%s) - $JOB_START_TIME ))" >> $GITHUB_ENV # Calculate duration in seconds and store in environment variable
+
+      - name: Notify Slack (Backend)
+        if: always() # Always run this step (even if previous steps fail)
+        uses: slackapi/slack-github-action@v1.25.0 # Use official Slack GitHub Action
+        with:
+          payload: |
+            {
+              "text": "*Job:* Backend (Node.js ${{ matrix.node-version }})\n*Status:* ${{ job.status }}\n*Duration:* ${{ env.JOB_DURATION }} seconds\n*Workflow:* ${{ github.workflow }}\n*Run:* #${{ github.run_number }}\n*Repo:* ${{ github.repository }}"
+            } # Slack message payload includes job info and duration
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # Slack webhook URL stored in GitHub secrets
+
+      - name: Echo job completion
+        if: success() # Only run if job was successful
+        run: echo "Backend job for Node.js ${{ matrix.node-version }} completed successfully!" # Bash echo to log success message
+
+  frontend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [14, 16, 18]
+    steps:
+      - uses: actions/checkout@v3 # Checkout the frontend code
+      - name: Set job start time
+        run: echo "JOB_START_TIME=$(date +%s)" >> $GITHUB_ENV # Record the job start time
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }} # Use matrix version
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm install # Install any frontend dependencies
+
+      - name: Serve frontend for testing # Start a local server and check if it's running
+        run: |
+          cd frontend
+          node server.js & # Start server in background (&) so next command can run
+          sleep 3 # Wait 3 seconds for server to start
+          curl -I http://localhost:4000 # Use curl to check if server is up (HEAD request)
+
+      - name: Calculate job duration
+        run: echo "JOB_DURATION=$(( $(date +%s) - $JOB_START_TIME ))" >> $GITHUB_ENV # Calculate how long the job took
+
+      - name: Notify Slack (Frontend)
+        if: always() # Always send Slack message
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "*Job:* Frontend (Node.js ${{ matrix.node-version }})\n*Status:* ${{ job.status }}\n*Duration:* ${{ env.JOB_DURATION }} seconds\n*Workflow:* ${{ github.workflow }}\n*Run:* #${{ github.run_number }}\n*Repo:* ${{ github.repository }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Echo job completion
+        if: success()
+        run: echo "Frontend job for Node.js ${{ matrix.node-version }} completed successfully!" # Echo final success message for the job
+
+```
 
 </details>
 
@@ -1102,11 +1320,22 @@ and also make the work faster and more efficient by allowing each of the collabo
 
 ******
 
+<details>
+<summary> – </summary>
+<br />
+
+
+
+</details>
+
+******
+
 
 
 <br/><br/>
 
 [view week1_QA](./QA/week1_QA.md)  
 [view week2_QA](./QA/week2_QA.md)  
-[view week3_QA](./QA/week3_QA.md)
-[view week4_QA](./QA/week4_QA.md)
+[view week3_QA](./QA/week3_QA.md)  
+[view week4_QA](./QA/week4_QA.md)  
+
