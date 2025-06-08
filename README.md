@@ -1338,4 +1338,5 @@ https://github.com/Benny902/week5-ci-cd
 [view week2_QA](./QA/week2_QA.md)  
 [view week3_QA](./QA/week3_QA.md)  
 [view week4_QA](./QA/week4_QA.md)  
+[view week5_QA](./QA/week5_QA.md)  
 
