@@ -1321,7 +1321,293 @@ https://github.com/Benny902/week5-ci-cd
 ******
 
 <details>
-<summary> – </summary>
+<summary>Week 6 Tasks – Daily Practice Tasks</summary>
+<br />
+
+# Docker & Containers Practice  
+Repo: https://github.com/Benny902/week6practice
+
+---
+
+## Task 1 – Introduction to Docker CLI
+
+- Install Docker from [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
+- Run first container:
+  ```bash
+  docker run hello-world
+  ```
+- Basic Docker CLI commands:
+  ```bash
+  docker ps        # List running containers
+  docker ps -a     # List all containers (including stopped)
+  docker images    # List downloaded images
+  docker stop <container_id>   # Stop a running container
+  docker rm <container_id>     # Remove a container
+  docker rmi <image_id>        # Remove an image
+  ```
+
+---
+
+## Task 2 – Working with Docker Images
+
+- Pull and run an NGINX container:
+  ```bash
+  docker run -d -p 8080:80 nginx
+  ```
+- Open `http://localhost:8080` in your browser or:
+  ```bash
+  curl http://localhost:8080
+  ```
+
+- Use a lightweight image:
+  ```bash
+  docker pull nginx:alpine
+  docker image ls
+  ```
+  Compare image sizes between `nginx` and `nginx:alpine`:
+```bash
+  $   docker image ls
+REPOSITORY      TAG IMAGE       ID              CREATED         SIZE
+nginx           latest          be69f2940aaf    7 weeks ago     192MB
+nginx           alpine          6769dc3a703c    7 weeks ago     48.2MB
+```
+
+---
+
+## Task 3 – Dockerfile Basics
+
+1. Create a `Dockerfile` for a simple Node.js app:
+
+**Example: Node.js App**
+
+```Dockerfile
+FROM node:alpine
+WORKDIR /app
+COPY . .
+RUN npm install
+CMD ["node", "server.js"]
+```
+
+2. Example `server.js`:
+
+```js
+import * as http from 'http';
+
+const PORT = 5000;
+http.createServer((req, res) => {
+  console.log(`${req.method} ${req.url}`);
+  res.end('Hello from Docker');
+}).listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+```
+
+3. Build and run:
+
+```bash
+docker build -t mynodeapp .
+docker run -p 5000:5000 mynodeapp
+```
+
+4. Add `.dockerignore`:
+```
+node_modules
+.env
+```
+### How `.dockerignore` affects build context:  
+This will prevent the node_modules and .env files from being copied into the Docker image.  
+- This reduces build context size (making builds faster).  
+- `node_modules`: It ensures Docker installs fresh dependencies inside the container, avoiding possible OS or version conflicts.  
+- keep sensitive files (like .env) out of production image.
+
+---
+
+## Task 4 – Custom Networking and Multi-container Setup
+
+- Create a network:
+  ```bash
+  docker network create mynet
+  ```
+
+- Run two containers on the same network:
+  ```bash
+  docker run -d --name db --network mynet mongo
+  docker run -it --rm --network mynet mongo mongosh --host db
+  ```
+
+- Use container names (`db`) to connect internally.
+
+---
+
+## Task 5 – Docker Compose Intro
+
+1. `docker-compose.yml` example:
+```yaml
+version: '3'
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - APP_ENV=dev
+    depends_on:
+      - db
+  db:
+    image: mongo
+    volumes:
+      - dbdata:/data/db
+volumes:
+  dbdata:
+```
+
+2. Run:
+```bash
+docker-compose up --build
+```
+
+3. to test that web service can communicate with the database i enhanced the `server.js` with:
+```js
+import mongoose from 'mongoose';
+
+mongoose.connect('mongodb://db:27017/mydb')
+  .then(() => console.log("It works!"))
+  .catch(err => console.log("Mongo connection failed:", err.message));
+```
+and now when we run with 'docker-compose up --build' we will see `It works!` in the logs
+
+---
+
+## Task 6 – Monitoring & Logging Basics
+
+- Add to the `Dockerfile`:
+```Dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:5000/ || exit 1
+```
+
+- Log HTTP requests in the app (already included in `server.js` above).
+- Use:
+```bash
+docker ps
+docker logs <container_id>
+docker inspect <container_id>
+```
+
+---
+
+## Task 7 – Advanced Docker Features
+
+- Tag your image:
+```bash
+docker tag mynodeapp mynodeapp:1.0.0
+```
+
+- Push to Docker Hub (optional):
+```bash
+docker login
+docker push mynodeapp:1.0.0
+```
+
+- Use optimized base images: (we already using this)
+```Dockerfile
+FROM node:alpine
+```
+
+- Simulate Slack notification (example):
+```bash
+curl -X POST -H 'Content-type: application/json' \
+  --data '{"text":"Build finished successfully!"}' \
+  https://hooks.slack.com/services/XXX/YYY/ZZZ
+```
+
+- Bonus app healthcheck endpoint (optional improvement):
+```js
+  hitCount++; // add `var hitCount = 0;` above this scope 
+  console.log(`Hit #${hitCount} - ${req.method} ${req.url}`);
+
+  if (req.url === '/health') {
+    // 20% chance to simulate a failure (for healthcheck testing)
+    if (Math.random() < 0.2) {
+      res.statusCode = 500;
+      res.end('Not Healthy');
+    } else {
+      res.statusCode = 200;
+      res.end('Healthy!');
+    }
+    return;
+  }
+```
+
+### now when we test with `curl -i http://localhost:5000/health`, we can see some results:
+in logs
+```bash
+web-1  | Hit #3 - GET /health
+web-1  | Hit #4 - GET /favicon.ico
+web-1  | GET /favicon.ico
+web-1  | Hit #5 - GET /health
+web-1  | Hit #6 - GET /favicon.ico
+web-1  | GET /favicon.ico
+web-1  | Hit #7 - GET /health
+web-1  | Hit #8 - GET /favicon.ico
+web-1  | GET /favicon.ico
+web-1  | Hit #9 - GET /health
+web-1  | Hit #10 - GET /favicon.ico
+web-1  | GET /favicon.ico
+```
+
+in bash:
+```bash
+Benny06nov21@Revision-PC MINGW64 ~
+$ curl -i http://localhost:5000/health
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100     8  100     8    0     0   3029      0 --:--:-- --:--:-- --:--:--  4000HTTP/1.1 200 OK
+Date: Tue, 10 Jun 2025 10:56:40 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 8
+
+Healthy!
+Benny06nov21@Revision-PC MINGW64 ~
+$ curl -i http://localhost:5000/health
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    11  100    11    0     0   4160      0 --:--:-- --:--:-- --:--:--  5500HTTP/1.1 500 Internal Server Error
+Date: Tue, 10 Jun 2025 10:56:40 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 11
+
+Not Healthy
+Benny06nov21@Revision-PC MINGW64 ~
+$ curl -i http://localhost:5000/health
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100     8  100     8    0     0   3153      0 --:--:-- --:--:-- --:--:--  4000HTTP/1.1 200 OK
+Date: Tue, 10 Jun 2025 10:56:41 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 8
+
+Healthy!
+```
+
+</details>
+
+******
+
+<details>
+<summary> Week 6 Summary Task – Docker & Containerization </summary>
+<br />
+
+soon
+
+</details>
+
+******
+
+<details>
+<summary> Week 7 - </summary>
 <br />
 
 
@@ -1329,7 +1615,6 @@ https://github.com/Benny902/week5-ci-cd
 </details>
 
 ******
-
 
 
 <br/><br/>
