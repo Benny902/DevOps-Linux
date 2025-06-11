@@ -1600,7 +1600,8 @@ Healthy!
 <summary> Week 6 Summary Task – Docker & Containerization </summary>
 <br />
 
-soon
+- repo: https://github.com/Benny902/week6-ci-cd-docker
+- has detailed readme on the repo above.
 
 </details>
 
@@ -1624,4 +1625,5 @@ soon
 [view week3_QA](./QA/week3_QA.md)  
 [view week4_QA](./QA/week4_QA.md)  
 [view week5_QA](./QA/week5_QA.md)  
+[view week6_QA](./QA/week6_QA.md)  
 
