@@ -1608,14 +1608,25 @@ Healthy!
 ******
 
 <details>
-<summary> Week 7 - </summary>
+<summary> Week 7 - daily Tasks </summary>
 <br />
-
+https://github.com/Benny902/week7practice
 
 
 </details>
 
 ******
+
+<details>
+<summary> Week 7 - Summary Task: Docker Compose & Azure + VM </summary>
+<br />
+https://github.com/Benny902/week7-collab
+
+
+</details>
+
+******
+
 
 
 <br/><br/>
