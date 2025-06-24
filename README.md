@@ -2021,10 +2021,6 @@ jobs:
         run: rm key.pem
 ```
 
-
-
-
-
 </details>
 
 ******
@@ -2033,7 +2029,7 @@ jobs:
 <summary> Week 8 - Summary Task:  </summary>
 <br />
 
-soon
+https://github.com/Benny902/week8summary
 
 </details>
 
