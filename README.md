@@ -1628,8 +1628,425 @@ https://github.com/Benny902/week7-collab
 ******
 
 
+<details>
+<summary> Week 8 - daily Tasks </summary>
+<br />
 
+# WEEK 8 – Daily Practice Tasks: Azure Infrastructure
+
+
+## Task 1 – Setup Azure CLI Environment
+```bash
+# to login:
+az login --use-device-code
+
+# to see list of accounts associated
+az account list --output table
+
+# to choose which one to apply
+az account set --subscription "YOUR_SUBSCRIPTION_NAME"
+```
+
+---
+
+## Task 2 – Use the Azure CLI to create a resource group and a basic Linux VM.
+
+### Generate the SSH key:
+```bash
+ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa
+```
+and then presse 'enter' to accept the file location.  
+and again press 'enter' two times to skip setting passphrase.
+
+### Script to create an Azure Linux VM and Add this public key to the VM
+`create_vm_and_add_public_key.sh`:
+```bash
+#!/bin/bash
+
+# Set variables
+RESOURCE_GROUP="bennyVMeastus2"
+LOCATION="eastus2" # cheapest for Standard_B1ls as i saw in pricing
+VM_NAME="myvm"
+ADMIN_USER="azureuser"
+
+# Create resource group
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+
+# Create VM # Standard_B1ls is the cheapest.
+az vm create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --image Ubuntu2204 \
+  --size Standard_B1ls \
+  --admin-username "$ADMIN_USER" \
+  --authentication-type ssh \
+  --generate-ssh-keys
+
+# Add the public key to the VM (from ~/.ssh/id_rsa.pub)
+az vm user update \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --username "$ADMIN_USER" \
+  --ssh-key-value "$(cat ~/.ssh/id_rsa.pub)"
+
+# Open SSH port 22 (if not already open)
+az vm open-port --port 22 --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"
+```
+
+### Run the Script:
+```bash
+chmod +x create_vm_and_add_public_key.sh
+./create_vm_and_add_public_key.sh
+```
+
+---
+
+## Task 3 – Configure Networking (NSG + Public IP)
+
+### Get Network Info:
+```bash
+az network nic list --resource-group bennyVMeastus2 -o table
+az network public-ip show --resource-group bennyVMeastus2 --name myVMPublicIP -o json
+```
+
+### Add NSG Rule to Allow HTTP (port 80):
+```bash
+az network nsg rule create \
+  --resource-group bennyVMeastus2 \
+  --nsg-name myVMNSG \
+  --name Allow-HTTP \
+  --priority 1001 \
+  --access Allow \
+  --direction Inbound \
+  --protocol Tcp \
+  --destination-port-range 80 \
+  --source-address-prefixes '*' \
+  --destination-address-prefixes '*'
+```
+- Replace `myVMNSG` with the correct NSG name (check using az network nsg list).
+
+---
+
+## Task 4 – Deploy a Simple Web App to the VM
+
+### Get the public IP of the VM with this command:
+```bash
+az vm show \
+  --resource-group bennyVMeastus2 \
+  --name myvm \
+  -d \
+  --query publicIps \
+  -o tsv
+```
+
+### Connect to the Azure VM without password:
+```bash
+ssh azureuser@<vm-public-ip>
+```
+
+### Install Docker & Docker Compose
+```bash
+# Update package info
+sudo apt update
+
+# Install Docker
+sudo apt install -y docker.io
+
+# Enable and start Docker
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Install Docker Compose
+sudo apt install -y docker-compose
+```
+
+
+### Copy The Project Files to the VM
+(go back to local machine with `exit`) : On local machine, in the project folder
+```bash
+scp -i ~/.ssh/id_rsa -r ./* azureuser@<vm-public-ip>:/home/azureuser/week8practice
+```
+
+
+### Build and Run the App on the VM
+connect to the vm again ( ssh azureuser@<vm-public-ip> ) and then:
+```bash
+cd ~/week8practice
+sudo docker-compose up -d --build
+```
+
+### This failed in my case i was because i was using 'cheap' VM with only 344mb, therfore i added `Swap`:
+- Swap gives you virtual memory using disk. It’s not as fast as RAM, but prevents OOM crashes.
+- Run these commands on the VM:
+```bash
+# Create a 1GB swap file
+sudo fallocate -l 1G /swapfile
+sudo chmod 600 /swapfile
+
+# Set up the swap space
+sudo mkswap /swapfile
+
+# Enable swap
+sudo swapon /swapfile
+
+# Make it persistent (so it works after reboot)
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# Check result # should see 'Swap:   1.0G   0B   1.0G'
+free -h
+```
+
+### Expose Public Ports (Backend: 3000, Frontend: 4000)
+- go back to our local (`exit`)
+```bash
+az vm open-port --port 3000 --resource-group bennyVMeastus2 --name myvm --priority 902
+az vm open-port --port 4000 --resource-group bennyVMeastus2 --name myvm --priority 903
+```
+- when tried without `--priority` i had conflict.
+- Each rule must have a unique priority (between 100 and 4096, lower number = higher priority).
+
+### Verify Application is Running
+
+- Backend: http://<vm-public-ip>:3000   
+
+- Frontend: http://<vm-public-ip>:4000   
+
+- To check logs or health:
+```bash
+sudo docker ps
+sudo docker-compose logs --tail=50
+```
+
+---
+
+## Task 5 – Use Azure Storage Account
+
+### Create Storage Account and Container:
+```bash
+az storage account create \
+  --name mystorageaccount123 \
+  --resource-group myResourceGroup \
+  --location eastus \
+  --sku Standard_LRS
+
+az storage container create \
+  --name mycontainer \
+  --account-name mystorageaccount123 \
+  --auth-mode login
+```
+
+### Upload a File:
+```bash
+echo "Hello from Azure CLI!" > test.txt
+
+az storage blob upload \
+  --account-name mystorageaccount123 \
+  --container-name mycontainer \
+  --name test.txt \
+  --file test.txt \
+  --auth-mode login
+```
+
+---
+
+## Task 6 – Script the Entire Deployment
+### Login before executing the script :
+```bash
+# to login:
+az login --use-device-code
+
+# to see list of accounts associated
+az account list --output table
+
+# to choose which one to apply
+az account set --subscription "YOUR_SUBSCRIPTION_NAME"
+```
+
+### The Entire Deployment Script: `full_vm_deploy.sh`:
+```bash
+#!/bin/bash
+
+# === CONFIG ===
+RESOURCE_GROUP="bennyVMeastus2"
+LOCATION="eastus2"
+VM_NAME="myvm"
+ADMIN_USER="azureuser"
+VM_SIZE="Standard_B1ls"
+DOCKER_APP_FOLDER="week8practice"
+LOCAL_PROJECT_PATH="."
+PRIORITY_HTTP=901
+PRIORITY_BACKEND=902
+PRIORITY_FRONTEND=903
+
+# === STEP 1: CREATE RESOURCE GROUP + VM ===
+echo "Creating resource group and VM..."
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+
+az vm create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --image Ubuntu2204 \
+  --size "$VM_SIZE" \
+  --admin-username "$ADMIN_USER" \
+  --authentication-type ssh \
+  --generate-ssh-keys
+
+# === STEP 2: ADD SSH KEY TO VM ===
+echo "Adding SSH key..."
+az vm user update \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --username "$ADMIN_USER" \
+  --ssh-key-value "$(cat ~/.ssh/id_rsa.pub)"
+
+# === STEP 3: OPEN PORTS ===
+echo "Opening ports..."
+az vm open-port --port 22 --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"
+az vm open-port --port 80 --priority $PRIORITY_HTTP --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"
+az vm open-port --port 3000 --priority $PRIORITY_BACKEND --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"
+az vm open-port --port 4000 --priority $PRIORITY_FRONTEND --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"
+
+# === STEP 4: GET PUBLIC IP ===
+VM_IP=$(az vm show -d -g "$RESOURCE_GROUP" -n "$VM_NAME" --query publicIps -o tsv)
+echo "VM Public IP: $VM_IP"
+
+# === STEP 5: INSTALL DOCKER, SWAP, AND DEPLOY APP ===
+echo "Installing Docker and deploying app remotely..."
+
+ssh -o StrictHostKeyChecking=no "$ADMIN_USER@$VM_IP" << EOF
+  # Update system
+  sudo apt update
+
+  # Install Docker & Compose
+  sudo apt install -y docker.io docker-compose
+  sudo systemctl enable docker
+  sudo systemctl start docker
+
+  # Add 1GB Swap
+  sudo fallocate -l 1G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+  # Prepare project folder
+  rm -rf ~/$DOCKER_APP_FOLDER
+  mkdir ~/$DOCKER_APP_FOLDER
+EOF
+
+echo "Copying project files to VM..."
+scp -i ~/.ssh/id_rsa -r $LOCAL_PROJECT_PATH/* "$ADMIN_USER@$VM_IP:/home/$ADMIN_USER/$DOCKER_APP_FOLDER"
+
+echo "Starting Docker app..."
+ssh -o StrictHostKeyChecking=no "$ADMIN_USER@$VM_IP" << EOF
+  cd ~/$DOCKER_APP_FOLDER
+  sudo docker-compose down --remove-orphans
+  sudo docker-compose up -d --build
+EOF
+
+echo "✅ Deployment complete."
+echo "Visit:"
+echo "  Backend:  http://$VM_IP:3000"
+echo "  Frontend: http://$VM_IP:4000"
+
+```
+
+### Optional Cleanup Script
+```bash
+#!/bin/bash
+RESOURCE_GROUP="bennyVMeastus2"
+echo "Deleting everything in resource group: $RESOURCE_GROUP"
+az group delete --name "$RESOURCE_GROUP" --yes --no-wait
+```
+
+---
+
+## Task 7 – Combine CI/CD and Azure Deployment (Advanced)
+
+### we start by Adding repository secrets in GitHub:
+(Settings > Secrets and variables > Actions):  
+- VM_HOST → azureuser@<vm-public-ip>
+- VM_SSH_KEY → Contents of the private ~/.ssh/id_rsa file (not the .pub!)
+
+
+## Create the Workflow File
+`deploy-vm.yml`:
+```yml
+name: Deploy to Azure VM
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-vm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Write SSH key
+        run: |
+          echo "${{ secrets.VM_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Copy files to VM with rsync
+        run: |
+          rsync -az --delete --exclude='.git' --exclude='node_modules' -e "ssh -i key.pem -o StrictHostKeyChecking=no" ./ ${{ secrets.VM_HOST }}:/home/azureuser/week7practice
+
+      - name: Deploy with docker-compose
+        run: |
+          ssh -i key.pem -o StrictHostKeyChecking=no ${{ secrets.VM_HOST }} "
+            cd /home/azureuser/week7practice &&
+            sudo docker-compose down --remove-orphans &&
+            sudo docker-compose up -d --build
+          "
+
+      - name: Healthcheck and get logs
+        run: |
+          ssh -i key.pem -o StrictHostKeyChecking=no ${{ secrets.VM_HOST }} "
+            sudo docker-compose ps
+            sudo docker-compose logs --tail=50
+          " > remote_logs.txt
+
+      - name: Upload VM logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-logs
+          path: remote_logs.txt
+
+      - name: Cleanup key
+        run: rm key.pem
+```
+
+
+
+
+
+</details>
+
+******
+
+<details>
+<summary> Week 8 - Summary Task:  </summary>
+<br />
+
+soon
+
+</details>
+
+******
+
+
+
+
+******
 <br/><br/>
+
+
+## Q&A Flashcards  
 
 [view week1_QA](./QA/week1_QA.md)  
 [view week2_QA](./QA/week2_QA.md)  
@@ -1637,4 +2054,6 @@ https://github.com/Benny902/week7-collab
 [view week4_QA](./QA/week4_QA.md)  
 [view week5_QA](./QA/week5_QA.md)  
 [view week6_QA](./QA/week6_QA.md)  
+[view week7_QA](./QA/week7_QA.md)  
+[view week8_QA](./QA/week8_QA.md)  
 
