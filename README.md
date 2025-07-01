@@ -2035,7 +2035,700 @@ https://github.com/Benny902/week8summary
 
 ******
 
+<details>
+<summary> Week 9 - daily Tasks  </summary>
+<br />
 
+# Week 9 – Daily Practice Tasks: Terraform on Azure
+
+## Task 1 – Install and Configure Terraform
+
+### Install terraform
+```bash
+sudo apt update && sudo apt install terraform -y
+### The above didnt work for me, the below worked for me:
+sudo snap install terraform --classic
+```
+install and check that it installed: `terraform -v`
+
+### Check azure login
+```bash
+# to login:
+az login --use-device-code
+
+# to see list of accounts associated and verify which is set as default.
+az account list --output table
+
+# to choose which one to apply
+az account set --subscription "YOUR_SUBSCRIPTION_NAME"
+```
+
+---
+
+## Task 2 – Write Basic Terraform Configuration
+### create main.tf file
+
+- create folder structure for terraform-rg
+```bash
+mkdir week9_practice
+cd week9_practice
+mkdir terraform-rg
+cd terraform-rg
+touch main.tf
+```
+
+- get SUB_ID to fill dynamicaly into the main.tf
+```bash
+SUB_ID=$(az account show --query id -o tsv | tr -d '\r\n')
+```
+
+- create main.tf file with the 'SUB_ID'
+```bash
+cat <<EOF > main.tf
+provider "azurerm" {
+  features {}
+  subscription_id = "$SUB_ID"
+}
+
+resource "azurerm_resource_group" "devops_rg" {
+  name     = "devops-week9-rg"
+  location = "West Europe"
+}
+EOF
+```
+
+
+### Initialize Terraform (downloads provider plugins)
+
+- create terraform related files.
+```bash
+terraform init
+```
+
+- Preview the execution plan:
+```bash
+terraform plan
+```
+
+- Apply the changes to Azure:
+```bash
+terraform apply
+```
+will be prompt to enter 'yes' to approve
+
+### Verify the resource group was created in the Azure Portal.
+![alt text](images/week9.png)
+
+---
+
+## Task 3 – Define and Deploy a Virtual Machine
+
+### Create variables.tf
+```bash
+cat <<EOF > variables.tf
+variable "location" {
+  default = "West Europe"
+}
+
+variable "vm_name" {
+  default = "week9vm"
+}
+
+variable "admin_username" {
+  default = "azureuser"
+}
+
+variable "ssh_public_key" {
+  description = "SSH public key for login"
+}
+EOF
+```
+
+### Create outputs.tf
+```bash
+cat <<EOF > outputs.tf
+output "public_ip_address" {
+  value = azurerm_public_ip.public_ip.ip_address
+}
+EOF
+```
+
+### Generate SSH Key
+```bash
+ssh-keygen -t rsa -b 2048
+```
+
+### Update main.tf:
+```bash
+cat <<EOF > main.tf
+provider "azurerm" {
+  features {}
+  subscription_id = "$SUB_ID"
+}
+
+resource "azurerm_resource_group" "devops_rg" {
+  name = "devops-week9-rg"
+  location = var.location
+}
+
+resource "azurerm_virtual_network" "vnet" {
+  name = "week9-vnet"
+  address_space = ["10.0.0.0/16"]
+  location = var.location
+  resource_group_name = azurerm_resource_group.devops_rg.name
+}
+
+resource "azurerm_subnet" "subnet" {
+  name = "week9-subnet"
+  resource_group_name = azurerm_resource_group.devops_rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes = ["10.0.1.0/24"]
+}
+
+resource "azurerm_network_security_group" "nsg" {
+  name = "week9-nsg"
+  location = var.location
+  resource_group_name = azurerm_resource_group.devops_rg.name
+
+  security_rule {
+    name = "SSH"
+    priority = 1001
+    direction = "Inbound"
+    access = "Allow"
+    protocol = "Tcp"
+    source_port_range = "*"
+    destination_port_range = "22"
+    source_address_prefix = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_public_ip" "public_ip" {
+  name = "week9-pip"
+  location = var.location
+  resource_group_name = azurerm_resource_group.devops_rg.name
+  allocation_method = "Dynamic"
+  sku = "Basic"
+}
+
+resource "azurerm_network_interface" "nic" {
+  name = "week9-nic"
+  location = var.location
+  resource_group_name = azurerm_resource_group.devops_rg.name
+
+  ip_configuration {
+    name = "internal"
+    subnet_id = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id = azurerm_public_ip.public_ip.id
+  }
+}
+
+resource "azurerm_linux_virtual_machine" "vm" {
+  name = var.vm_name
+  resource_group_name = azurerm_resource_group.devops_rg.name
+  location = var.location
+  size = "Standard_B1ls"
+  admin_username = var.admin_username
+  network_interface_ids = [azurerm_network_interface.nic.id]
+
+  depends_on = [azurerm_public_ip.public_ip]
+
+  admin_ssh_key {
+    username = var.admin_username
+    public_key = var.ssh_public_key
+  }
+
+  os_disk {
+    caching = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer = "UbuntuServer"
+    sku = "18.04-LTS"
+    version = "latest"
+  }
+}
+EOF
+```
+
+### Initialize and Apply
+```bash
+terraform init
+terraform apply -var="ssh_public_key=$(cat ~/.ssh/id_rsa.pub)"
+```
+
+after the apply it will provide the public ip, in my case:
+```bash
+public_ip_address = "108.142.225.74"
+```
+
+### SSH into the VM
+```bash
+ssh azureuser@108.142.225.74
+```
+
+---
+
+## Task 4 – Organize Terraform Code with Modules
+
+### Create additional folder structure for modules  
+
+```css
+terraform-rg/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+└── modules/
+    ├── resource_group/
+    │   └── main.tf
+    ├── network/
+    │   └── main.tf
+    └── vm/
+        └── main.tf
+```
+
+### `modules/resource_group/main.tf`
+```bash
+mkdir -p modules/resource_group
+cat <<EOF > modules/resource_group/main.tf
+resource "azurerm_resource_group" "devops_rg" {
+  name     = var.name
+  location = var.location
+}
+EOF
+```
+
+### `modules/resource_group/variables.tf`
+```bash
+mkdir -p modules/resource_group
+cat <<EOF > modules/resource_group/variables.tf
+variable "name" {}
+variable "location" {}
+EOF
+```
+
+### `modules/resource_group/outputs.tf`
+```bash
+mkdir -p modules/resource_group
+cat <<EOF > modules/resource_group/outputs.tf
+output "name" {
+  value = azurerm_resource_group.devops_rg.name
+}
+
+output "location" {
+  value = azurerm_resource_group.devops_rg.location
+}
+
+output "id" {
+  value = azurerm_resource_group.devops_rg.id
+}
+EOF
+```
+
+### `modules/network/main.tf`
+```bash
+mkdir -p modules/network
+cat <<EOF > modules/network/main.tf
+resource "azurerm_virtual_network" "vnet" {
+  name                = "week9-vnet"
+  address_space       = ["10.0.0.0/16"]
+  location            = var.location
+  resource_group_name = var.rg_name
+}
+
+resource "azurerm_subnet" "subnet" {
+  name                 = "week9-subnet"
+  resource_group_name  = var.rg_name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
+
+resource "azurerm_network_security_group" "nsg" {
+  name                = "week9-nsg"
+  location            = var.location
+  resource_group_name = var.rg_name
+
+  security_rule {
+    name                       = "SSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_public_ip" "public_ip" {
+  name                = "week9-pip"
+  location            = var.location
+  resource_group_name = var.rg_name
+  allocation_method   = "Dynamic"
+  sku                 = "Basic"
+}
+
+resource "azurerm_network_interface" "nic" {
+  name                = "week9-nic"
+  location            = var.location
+  resource_group_name = var.rg_name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.public_ip.id
+  }
+}
+EOF
+```
+
+### `modules/network/variables.tf`
+```bash
+mkdir -p modules/network
+cat <<EOF > modules/network/variables.tf
+variable "location" {}
+variable "rg_name" {}
+EOF
+```
+
+### `modules/network/outputs.tf`
+```bash
+mkdir -p modules/network
+cat <<EOF > modules/network/outputs.tf
+output "nic_id" {
+  value = azurerm_network_interface.nic.id
+}
+
+output "public_ip" {
+  value = azurerm_public_ip.public_ip.ip_address
+}
+EOF
+```
+
+### `modules/vm/main.tf`
+```bash
+mkdir -p modules/vm
+cat <<EOF > modules/vm/main.tf
+resource "azurerm_linux_virtual_machine" "vm" {
+  name                  = var.vm_name
+  resource_group_name   = var.rg_name
+  location              = var.location
+  size                  = "Standard_B1ls"
+  admin_username        = var.admin_username
+  network_interface_ids = [var.nic_id]
+
+  depends_on = [var.public_ip_dep]
+
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = var.ssh_public_key
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "18.04-LTS"
+    version   = "latest"
+  }
+}
+EOF
+```
+
+### `modules/vm/variables.tf`
+```bash
+mkdir -p modules/vm
+cat <<EOF > modules/vm/variables.tf
+variable "vm_name" {}
+variable "location" {}
+variable "rg_name" {}
+variable "admin_username" {}
+variable "ssh_public_key" {}
+variable "nic_id" {}
+variable "public_ip_dep" {}
+EOF
+```
+
+## Update Root `main.tf`:
+
+```bash
+cat <<EOF > main.tf
+provider "azurerm" {
+  features {}
+  subscription_id = "$SUB_ID"
+}
+
+module "rg" {
+  source   = "./modules/resource_group"
+  name     = "devops-week9-rg"
+  location = var.location
+}
+
+module "network" {
+  source  = "./modules/network"
+  rg_name = module.rg.name
+  location = var.location
+}
+
+module "vm" {
+  source           = "./modules/vm"
+  rg_name          = module.rg.name
+  location         = var.location
+  vm_name          = var.vm_name
+  admin_username   = var.admin_username
+  ssh_public_key   = var.ssh_public_key
+  nic_id           = module.network.nic_id
+  public_ip_dep    = module.network
+
+  depends_on = [module.network]
+}
+EOF
+```
+
+`variables.tf`:
+```bash
+cat <<EOF > variables.tf
+variable "location" {
+  default = "West Europe"
+}
+
+variable "vm_name" {
+  default = "week9vm"
+}
+
+variable "admin_username" {
+  default = "azureuser"
+}
+
+variable "ssh_public_key" {}
+EOF
+```
+
+`outputs.tf`:
+```bash
+cat <<EOF > outputs.tf
+# Resource Group Outputs
+output "rg_name" {
+  value = module.rg.name
+}
+
+output "rg_location" {
+  value = module.rg.location
+}
+
+output "rg_id" {
+  value = module.rg.id
+}
+
+# Network Outputs
+output "nic_id" {
+  value = module.network.nic_id
+}
+
+output "public_ip_address" {
+  value = module.network.public_ip
+}
+EOF
+```
+
+### Initialize and Apply
+```bash
+terraform init
+terraform apply -var="ssh_public_key=$(cat ~/.ssh/id_rsa.pub)"
+```
+
+## Result:
+![alt text](images/week9task4result.png)
+
+
+---
+
+## Task 5 – Remote State with Azure Storage (with Logging & Debugging)
+
+### Create Storage Account & Container for Remote State
+```bash
+# Set variables
+RESOURCE_GROUP="devops-week9-rg"
+STORAGE_ACCOUNT="tfstateweek9$(date +%s)"
+CONTAINER_NAME="tfstate"
+LOCATION="westeurope"
+
+# Create the storage account
+az storage account create \
+  --name "$STORAGE_ACCOUNT" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --sku Standard_LRS
+
+# Get the storage account key
+ACCOUNT_KEY=$(az storage account keys list \
+  --resource-group "$RESOURCE_GROUP" \
+  --account-name "$STORAGE_ACCOUNT" \
+  --query '[0].value' -o tsv)
+
+# Create the blob container
+az storage container create \
+  --name "$CONTAINER_NAME" \
+  --account-name "$STORAGE_ACCOUNT" \
+  --account-key "$ACCOUNT_KEY"
+```
+
+
+### Add a backend "azurerm" Block
+Create a file: backend.tf (get storage_account_name from the created above)
+```bash
+cat <<EOF > backend.tf
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "devops-week9-rg"
+    storage_account_name = "tfstateweek91751378036"
+    container_name       = "tfstate"
+    key                  = "terraform.tfstate"
+  }
+}
+EOF
+```
+
+
+### Make a simple change and verify remote state functionality
+Add a Tag to the VM by updating `modules/vm/main.tf`
+```bash
+cat <<EOF > modules/vm/main.tf
+resource "azurerm_linux_virtual_machine" "vm" {
+  name                  = var.vm_name
+  resource_group_name   = var.rg_name
+  location              = var.location
+  size                  = "Standard_B1ls"
+  admin_username        = var.admin_username
+  network_interface_ids = [var.nic_id]
+
+  depends_on = [var.public_ip_dep]
+
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = var.ssh_public_key
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "18.04-LTS"
+    version   = "latest"
+  }
+
+  tags = {
+    environment = "dev"
+  }
+}
+EOF
+```
+
+### Apply
+```bash
+terraform apply -var="ssh_public_key=$(cat ~/.ssh/id_rsa.pub)"
+```
+
+### We can verify it added the tag by:
+```bash
+az vm show \
+  --name week9vm \
+  --resource-group devops-week9-rg \
+  --query tags
+```
+
+
+### Enable TF_LOG=DEBUG
+```bash
+TF_LOG=DEBUG terraform apply -var="ssh_public_key=$(cat ~/.ssh/id_rsa.pub)" -auto-approve 2>&1 | tee tf_debug.log
+```
+- `TF_LOG=DEBUG`: Enables logging.
+
+- `-auto-approve` to skip confirmation prompts.
+
+- `2>&1 | tee tf_debug.log`: Saves logs into a file (tf_debug.log) and shows them in the terminal.
+
+
+---
+
+## Task 6 – Advanced Practice: Import and Cleanup
+
+### Create a Manual Resource in Azure
+```bash
+az group create --name imported-rg --location westeurope
+```
+
+- get SUB_ID to fill dynamicaly into the main.tf
+```bash
+SUB_ID=$(az account show --query id -o tsv | tr -d '\r\n')
+```
+
+- create main.tf file with the 'SUB_ID'
+```bash
+cd ..
+mkdir imported-rg
+cd imported-rg
+cat <<EOF > main.tf
+provider "azurerm" {
+  features {}
+  subscription_id = "$SUB_ID"
+}
+
+resource "azurerm_resource_group" "imported" {
+  name     = "imported-rg"
+  location = "westeurope"
+}
+EOF
+```
+
+### Initialize and import
+```bash
+terraform init
+terraform import azurerm_resource_group.imported "/subscriptions/$SUB_ID/resourceGroups/imported-rg"
+```
+
+### Result:
+```bash
+Import successful!
+
+The resources that were imported are shown above. These resources are now in
+your Terraform state and will henceforth be managed by Terraform.
+```
+
+### Destroy all deployed resources using `terraform destroy` and verify deletion in the Azure Portal.
+```bash
+terraform destroy
+```
+- Verifed and it deleted.
+
+
+
+</details>
+
+******
+
+<details>
+<summary> Week 9 - Summary Task:  </summary>
+<br />
+
+https://github.com/Benny902/week8summary
+
+</details>
+
+******
 
 
 ******
