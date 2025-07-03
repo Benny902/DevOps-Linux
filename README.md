@@ -2724,7 +2724,7 @@ terraform destroy
 <summary> Week 9 - Summary Task:  </summary>
 <br />
 
-https://github.com/Benny902/week8summary
+https://github.com/Benny902/week9summary
 
 </details>
 
@@ -2745,4 +2745,5 @@ https://github.com/Benny902/week8summary
 [view week6_QA](./QA/week6_QA.md)  
 [view week7_QA](./QA/week7_QA.md)  
 [view week8_QA](./QA/week8_QA.md)  
+[view week9_QA](./QA/week9_QA.md)  
 
